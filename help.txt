@@ -1,0 +1,31 @@
+ansible all -m ping
+
+Просмотреть все хости которые есть в файле хостс.
+ansible-inventory --list
+
+Вивод информации о каждом хосте.
+ansible all -m setup
+
+ansible all -m shell -a "uptime"
+
+Скопировать файл на все хости (если нужно как судо то в конце добавить -b)
+ansible all -m copy -a "src=help.txt dest=/home/haker mode=400"
+
+Вивод информации об скопированом файле
+ansible all -m shell -a "ls -l /home/haker"
+
+Централизованое удаление файла
+ansible all -m file -a "path=/home/haker/help.txt state=absent"
+
+Скачать файл с инета на удаленные тачки
+ansible all -m get_url -a "url=https://github.com/argos-research/sumo.git dest=/home/haker"
+
+Инсталировать програмы
+ansible all -m apt -a "name=stress state=installed" -b
+
+Удалить програму
+ansible all -m apt -a "name=stress state=removed" -b
+
+Проверка конекта
+ansible all -m uri -a "ur=http://www.google.com"
+
