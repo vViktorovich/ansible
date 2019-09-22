@@ -1,0 +1,79 @@
+https://www.opennet.ru/docs/RUS/iptables/#KERNELSETUP
+
+порты прокси (8080/tcp), SSH (22/tcp), SMB (139,445/tcp, 137,138/udp), DNS (53/tcp, udp), NTP (123/udp). 
+Также для этих хостов разрешены ICMP-эхо-запросы (пинги).
+
+Например, предположим, что нам нужно обеспечить доступ к определенным портам нашего сервера для всех хостов из 
+подсети 10.134.0.64/26, кроме 10.134.0.67 и 10.134.0.100.
+
+iptables -F # Очищаем все цепочки таблицы filter
+iptables -N our_subnet # Создаем специальную цепочку для проверки пакетов из нашей подсети
+iptables -A our_subnet -s 10.134.0.67 -j RETURN # Запрещенный хост — выходим
+iptables -A our_subnet -s 10.134.0.100 -j RETURN # Запрещенный хост — выходим
+# Всем остальным разрешаем доступ к нужным портам
+iptables -A our_subnet -p tcp -m multiport --dports 22,53,8080,139,445 -j ACCEPT
+iptables -A our_subnet -p udp -m multiport --dports 53,123,137,138 -j ACCEPT
+iptables -A our_subnet -p icmp --icmp-type 8 -j ACCEPT
+# Разрешаем пакеты по уже установленным соединениям
+iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+# Все пакеты из нашей подсети отправляем на проверку
+iptables -A INPUT -s 10.134.0.64/26 -j our_subnet
+iptables -P INPUT DROP # Что не разрешено — то запрещено
+iptables -P OUTPUT ACCEPT # На выход — можно все
+
+
+Впрочем, изложенный принцип теряет первоначальный смысл, если в разных случаях нужно обеспечить разные способы блокирования. 
+Рассмотрим чуть более сложный пример: допустим, наш сервер подключен к локальной сети 10.0.0.0/8. В ней есть некий 
+«недоверенный» сегмент, скажем, 10.122.0.0/16, для которого нужно полностью заблокировать доступ к нашему серверу. 
+Но в этом сегменте есть несколько «хороших» хостов (скажем, 10.122.72.11 и 10.122.180.91), которые блокировать не нужно. 
+Поставленную задачу можно решить следующим образом:
+
+iptables -F # Очищаем все цепочки таблицы filter
+iptables -N check_untrusted # Создаем специальную цепочку для проверки пакетов из нашей подсети
+iptables -A check_untrusted -s 10.122.72.11 -j RETURN # Разрешенный хост — выходим
+iptables -A check_untrusted -s 10.122.180.91 -j RETURN # Разрешенный хост — выходим
+iptables -A check_untrusted -j DROP # Остальных — молча игнорируем
+# Разрешаем пакеты по уже установленным соединениям
+iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+# Пакеты из недоверенной подсети проверяем по списку
+iptables -A INPUT -s 10.122.0.0/16 -j check_untrusted
+# Всем остальным разрешаем доступ к нужным портам
+iptables -A INPUT -p tcp -m multiport --dports 22,53,8080,139,445 -j ACCEPT
+iptables -A INPUT -p udp -m multiport --dports 53,123,137,138 -j ACCEPT
+iptables -A INPUT -p icmp --icmp-type 8 -j ACCEPT
+# «Хорошим» хостам, обращающимся на неправильные TCP-порты, вежливо сообщаем об отказе
+iptables -A INPUT -p tcp -j REJECT --reject-with tcp-reset
+# Для всех остальных протоколов используем стандартный REJECT с icmp-port-unreachable
+iptables -P INPUT REJECT
+iptables -P OUTPUT ACCEPT # На выход — можно все
+
+
+Например, предположим, что у нас есть объединенная через один свитч подсеть 10.134.0.64/26, к которой 
+наш компьютер подключен через интерфейс eth1. Тогда защиту от спуфинга (подделки адресов отправителя) через проверку 
+MAC-адреса можно обеспечить следующим образом:
+
+sysctl net.ipv4.ip_forward=1 # Разрешаем шлюзу передавать транзитный трафик
+iptables -F # Очищаем все цепочки таблицы filter
+iptables -N check_ours_sp00f # Создаем цепочку, в которой будут проверяться MAC-адреса
+iptables -A check_ours_sp00f -s 10.134.0.67 -m mac --mac-source 00:1D:60:2E:ED:A5 -j RETURN
+iptables -A check_ours_sp00f -s 10.134.0.68 -m mac --mac-source 00:1D:60:2E:ED:CD -j RETURN
+iptables -A check_ours_sp00f -s 10.134.0.69 -m mac --mac-source 00:1D:60:2E:ED:D7 -j RETURN
+iptables -A check_ours_sp00f -s 10.134.0.70 -m mac --mac-source 00:1D:60:2E:ED:E0 -j RETURN
+# Аналогичным образом проверяем все адреса нашей подсети
+# И в конце обязательно добаляем правило для НЕпрошедших проверку
+iptables -A check_ours_sp00f -j DROP
+iptables -N check_ours # Создаем цепочку, которая будет описывать логику работы с нашей подсетью
+iptables -A check_ours ! -i eth1 -j DROP # С других интерфейсов пакеты от них прийти не могут
+iptables -A check_ours -j check_ours_sp00f # Прогоняем их через проверку на спуфинг
+iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT # Как обычно, пропускаем все, что идет по установленным соединениям
+iptables -A INPUT -s 10.134.0.64/26 -j check_ours # Тех, кто претендует на звание своих, прогоняем через проверку
+# Прошедшим проверку разрешаем пользоваться нащей проксёй и самбой, а также соединяться по ssh
+iptables -A INPUT -s 10.134.0.64/26 -m multiport --dports 22,8080,139,445 -j ACCEPT
+iptables -P INPUT DROP # Остальных блокируем
+iptables -A FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT # Как обычно, пропускаем все, что идет по установленным соединениям
+iptables -A FORWARD -s 10.134.0.64/26 -j check_ours # Проверка
+iptables -A FORWARD -s 10.134.0.64/26 -j ACCEPT # Прошедшим проверку разрешаем передавать через нас транзитный трафик
+iptables -P FORWARD DROP # Остальных блокируем
+iptables -P OUTPUT ACCEPT # Исходящий трафик разрешаем
+
+
