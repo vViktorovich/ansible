@@ -1,0 +1,29 @@
+sudo service docker status
+
+sudo docker inspect openvas
+
+https://wiki.merionet.ru/servernye-resheniya/9/kak-rabotat-s-dockerfile/
+https://github.com/mikesplain/openvas-docker 
+
+docker run -d -p 443:443 -p 9390:9390 --name openvas mikesplain/openvas
+docker run -d -p 443:443 -p 9390:9390 -p 9391:9391 --name openvas mikesplain/openvas
+
+sudo docker run -d -p 127.0.0.1:443:443 -p 127.0.0.1:9390:9390 -p 127.0.0.1:9391:9391 --name openvas mikesplain/openvas
+
+sudo docker exec -it openvas bash
+
+docker exec -it openvas bash
+## inside container
+greenbone-nvt-sync
+openvasmd --rebuild --progress
+greenbone-certdata-sync
+greenbone-scapdata-sync
+openvasmd --update --verbose --progress  
+
+/etc/init.d/openvas-manager restart
+/etc/init.d/openvas-scanner restart
+
+https://code.i-harness.com/ru/docs/docker~17/engine/userguide/networking/default_network/container-communication/index
+
+jenkins
+https://code-maze.com/ci-jenkins-docker/
