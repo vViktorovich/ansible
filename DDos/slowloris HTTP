@@ -1,2 +1,3 @@
 https://github.com/gkbrk/slowloris
 
+perl slowloris.pl -dns test.com
